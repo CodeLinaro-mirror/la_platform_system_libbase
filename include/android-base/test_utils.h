@@ -23,6 +23,21 @@
 #include <android-base/file.h>
 #include <android-base/macros.h>
 
+namespace android {
+namespace base {
+
+// Prevents the compiler from optimizing away an otherwise unused expression.
+template <class T>
+static inline void DoNotOptimize(T const& value) {
+  asm volatile("" : : "r,m"(value) : "memory");
+}
+
+// Prevents the compiler from optimizing away an otherwise unused expression.
+template <class T>
+static inline void DoNotOptimize(T& value) {
+  asm volatile("" : "+r,m"(value) : : "memory");
+}
+
 class CapturedStdFd {
  public:
   CapturedStdFd(int std_fd);
@@ -44,12 +59,17 @@ class CapturedStdFd {
   DISALLOW_COPY_AND_ASSIGN(CapturedStdFd);
 };
 
-class CapturedStderr : public CapturedStdFd {
+}
+}
+
+// TODO: move these things into the correct namespace
+
+class CapturedStderr : public android::base::CapturedStdFd {
  public:
   CapturedStderr() : CapturedStdFd(STDERR_FILENO) {}
 };
 
-class CapturedStdout : public CapturedStdFd {
+class CapturedStdout : public android::base::CapturedStdFd {
  public:
   CapturedStdout() : CapturedStdFd(STDOUT_FILENO) {}
 };
