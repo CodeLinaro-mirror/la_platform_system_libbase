@@ -67,11 +67,6 @@ class CapturedStdFd {
   DISALLOW_COPY_AND_ASSIGN(CapturedStdFd);
 };
 
-}
-}
-
-// TODO: move these things into the correct namespace
-
 class CapturedStderr : public android::base::CapturedStdFd {
  public:
   CapturedStderr() : CapturedStdFd(STDERR_FILENO) {}
@@ -116,3 +111,6 @@ class CapturedStdout : public android::base::CapturedStdFd {
       ADD_FAILURE() << "regex mismatch: expected to not find " << (__pattern) << " in:\n" << __s; \
     }                                                                                             \
   } while (0)
+
+}
+}

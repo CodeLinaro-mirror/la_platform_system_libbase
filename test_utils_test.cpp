@@ -57,7 +57,7 @@ TEST(TestUtilsTest, ExpectNotMatch) {
 }
 
 TEST(TestUtilsTest, CaptureStdout_smoke) {
-  CapturedStdout cap;
+  android::base::CapturedStdout cap;
   printf("This should be captured.\n");
   fflush(stdout);
   cap.Stop();
@@ -81,7 +81,7 @@ TEST(TestUtilsTest, CaptureStdout_smoke) {
 }
 
 TEST(TestUtilsTest, CaptureStderr_smoke) {
-  CapturedStderr cap;
+  android::base::CapturedStderr cap;
   fprintf(stderr, "This should be captured.\n");
   cap.Stop();
   fprintf(stderr, "This will not be captured.\n");
