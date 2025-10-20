@@ -18,6 +18,8 @@
 
 #include "android-base/test_utils.h"
 
+#include <android-base/file.h>
+
 #include <gtest/gtest-spi.h>
 #include <gtest/gtest.h>
 
@@ -97,6 +99,19 @@ TEST(TestUtilsTest, CaptureStderr_smoke) {
   cap.Start();
   fprintf(stderr, "Only this will be captured.\n");
   ASSERT_EQ("Only this will be captured.\n", cap.str());
+}
+
+TEST(TestUtilsTest, VerifyRunningWithScudo) {
+#if !defined(__BIONIC__)
+  GTEST_SKIP() << "Only available on bionic.";
+#endif
+
+  // Use a different method to determine if scudo is running and make sure
+  // that the function matches the result.
+  std::string contents;
+  ASSERT_TRUE(ReadFileToString("/proc/self/maps", &contents));
+  bool scudo_running = contents.find("scudo") != std::string::npos;
+  ASSERT_EQ(running_with_scudo(), scudo_running);
 }
 
 }  // namespace base
