@@ -16,12 +16,18 @@
 
 #pragma once
 
+#include <malloc.h>
+#include <stdio.h>
+#include <string.h>
+
 #include <regex>
 #include <string>
 #include <type_traits>
 
 #include <android-base/file.h>
 #include <android-base/macros.h>
+
+extern "C" void __hwasan_init() __attribute__((weak));
 
 namespace android {
 namespace base {
@@ -37,6 +43,32 @@ template <class T>
 static inline void DoNotOptimize(T& value) {
   asm volatile("" : "+r,m"(value) : : "memory");
 }
+
+static inline bool running_with_hwasan() {
+  return &__hwasan_init != nullptr;
+}
+
+#define SKIP_WITH_HWASAN if (android::base::running_with_hwasan()) GTEST_SKIP()
+
+static inline bool running_with_scudo() {
+#if defined(__BIONIC__)
+  char* buf = nullptr;
+  size_t size = 0;
+  FILE* fp = open_memstream(&buf, &size);
+  if (fp == nullptr) return false;
+  malloc_info(0, fp);
+  fflush(fp);
+  bool result = strstr(buf, "scudo") != nullptr;
+  fclose(fp);
+  free(buf);
+  return result;
+#else
+  return false;
+#endif
+}
+
+#define SKIP_WITHOUT_SCUDO \
+  if (!android::base::running_with_scudo()) GTEST_SKIP()
 
 class CapturedStdFd {
  public:
@@ -58,11 +90,6 @@ class CapturedStdFd {
 
   DISALLOW_COPY_AND_ASSIGN(CapturedStdFd);
 };
-
-}
-}
-
-// TODO: move these things into the correct namespace
 
 class CapturedStderr : public android::base::CapturedStdFd {
  public:
@@ -109,9 +136,5 @@ class CapturedStdout : public android::base::CapturedStdFd {
     }                                                                                             \
   } while (0)
 
-extern "C" void __hwasan_init() __attribute__((weak));
-static inline bool running_with_hwasan() {
-  return &__hwasan_init != nullptr;
 }
-
-#define SKIP_WITH_HWASAN if (running_with_hwasan()) GTEST_SKIP()
+}
