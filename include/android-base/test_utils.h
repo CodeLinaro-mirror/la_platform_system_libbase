@@ -16,10 +16,6 @@
 
 #pragma once
 
-#include <malloc.h>
-#include <stdio.h>
-#include <string.h>
-
 #include <regex>
 #include <string>
 #include <type_traits>
@@ -49,26 +45,6 @@ static inline bool running_with_hwasan() {
 }
 
 #define SKIP_WITH_HWASAN if (android::base::running_with_hwasan()) GTEST_SKIP()
-
-static inline bool running_with_scudo() {
-#if defined(__BIONIC__)
-  char* buf = nullptr;
-  size_t size = 0;
-  FILE* fp = open_memstream(&buf, &size);
-  if (fp == nullptr) return false;
-  malloc_info(0, fp);
-  fflush(fp);
-  bool result = strstr(buf, "scudo") != nullptr;
-  fclose(fp);
-  free(buf);
-  return result;
-#else
-  return false;
-#endif
-}
-
-#define SKIP_WITHOUT_SCUDO \
-  if (!android::base::running_with_scudo()) GTEST_SKIP()
 
 class CapturedStdFd {
  public:
