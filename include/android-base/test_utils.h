@@ -16,9 +16,15 @@
 
 #pragma once
 
+// For __BIONIC__
+#include <sys/cdefs.h>
+
+#if defined(__BIONIC__)
 #include <malloc.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#endif
 
 #include <regex>
 #include <string>
