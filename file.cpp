@@ -214,34 +214,56 @@ namespace base {
 
 // Versions of standard library APIs that support UTF-8 strings.
 using namespace android::base::utf8;
-
 bool ReadFdToString(borrowed_fd fd, std::string* content) {
-  content->clear();
+  ssize_t n;
 
-  // Although original we had small files in mind, this code gets used for
-  // very large files too, where the std::string growth heuristics might not
-  // be suitable. https://code.google.com/p/android/issues/detail?id=258500.
-  struct stat sb;
-  if (fstat(fd.get(), &sb) != -1 && sb.st_size > 0 && sb.st_size <= SSIZE_MAX) {
+  if (struct stat sb; fstat(fd.get(), &sb) != -1 && sb.st_size > 0 && sb.st_size <= SSIZE_MAX) {
+    // Although originally we had small files in mind, this code gets used for very large files too,
+    // where the std::string growth heuristics might not be suitable.
+    // https://code.google.com/p/android/issues/detail?id=258500.
+    // Since we know the file size here we can perform one large allocation up front to avoid
+    // reallocations and copies that would occur as the string size grows as data is read.
+
+    content->resize(sb.st_size);
+
     // Shrink the string capacity to fit the file, but if the capacity is only
-    // slightly larger than needed, avoid reallocating. std::string::reserve no
-    // longer lowers capacity after P0966R1, but it does round the request up a
-    // small amount (e.g. 8 or 16 bytes).
-    size_t fd_size = sb.st_size;
-    if (fd_size > content->capacity()) {
-      content->reserve(fd_size);
-    } else if (fd_size < content->capacity() && content->capacity() - fd_size >= 64) {
+    // slightly larger than needed, avoid reallocating.
+    if (content->size() < content->capacity() && content->capacity() - content->size() >= 64) {
       content->shrink_to_fit();
-      content->reserve(fd_size);
+    }
+
+    std::string::size_type bytes_read = 0;
+    while (bytes_read < content->size() &&
+           (n = TEMP_FAILURE_RETRY(read(fd.get(), content->data() + bytes_read,
+                                        content->size() - bytes_read))) > 0) {
+      bytes_read += n;
+    }
+
+    if (n < 0) return false;
+
+    // If the file was truncated and we read fewer bytes than size, we need to update the size of
+    // the output string to reflect the number of bytes we actually read instead of what was
+    // initially set.
+    content->resize(bytes_read);
+  } else {
+    content->clear();
+    // We have no idea how much to read. Use buffered reading below to avoid overallocating
+    // the output string for small files.
+    n = -1;
+  }
+
+  // Since we expect to stop at the size advertised by fstat we don't know if we're at the end here
+  // because read() will not have returned 0 yet, unless the file was truncated and we stopped
+  // early, so we need to read at least once more until we get 0 bytes from read.
+  // The file could also have been extended while we were reading.
+  if (n != 0) [[likely]] {
+    char buf[4096] __attribute__((__uninitialized__));
+    while ((n = TEMP_FAILURE_RETRY(read(fd.get(), &buf[0], sizeof(buf)))) > 0) {
+      content->append(buf, n);
     }
   }
 
-  char buf[4096] __attribute__((__uninitialized__));
-  ssize_t n;
-  while ((n = TEMP_FAILURE_RETRY(read(fd.get(), &buf[0], sizeof(buf)))) > 0) {
-    content->append(buf, n);
-  }
-  return (n == 0) ? true : false;
+  return n == 0;
 }
 
 bool ReadFileToString(const std::string& path, std::string* content, bool follow_symlinks) {
