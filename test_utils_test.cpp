@@ -102,6 +102,10 @@ TEST(TestUtilsTest, CaptureStderr_smoke) {
 }
 
 TEST(TestUtilsTest, VerifyRunningWithScudo) {
+#if !defined(__BIONIC__)
+  GTEST_SKIP() << "Only available on bionic.";
+#endif
+
   // Use a different method to determine if scudo is running and make sure
   // that the function matches the result.
   std::string contents;
