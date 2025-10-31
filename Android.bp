@@ -33,6 +33,7 @@ license {
 
 cc_defaults {
     name: "libbase_cflags_defaults",
+    cpp_std: "gnu++23",
     cflags: [
         "-Wall",
         "-Werror",
