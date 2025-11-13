@@ -224,27 +224,22 @@ bool ReadFdToString(borrowed_fd fd, std::string* content) {
     // Since we know the file size here we can perform one large allocation up front to avoid
     // reallocations and copies that would occur as the string size grows as data is read.
 
-    content->resize(sb.st_size);
+    content->resize_and_overwrite(sb.st_size, [&n, &fd](char* buf, size_t size) noexcept {
+      std::string::size_type bytes_read = 0;
+      while (bytes_read < size &&
+             (n = TEMP_FAILURE_RETRY(read(fd.get(), buf + bytes_read, size - bytes_read))) > 0) {
+        bytes_read += n;
+      }
+      return bytes_read;
+    });
+
+    if (n < 0) return false;
 
     // Shrink the string capacity to fit the file, but if the capacity is only
     // slightly larger than needed, avoid reallocating.
     if (content->size() < content->capacity() && content->capacity() - content->size() >= 64) {
       content->shrink_to_fit();
     }
-
-    std::string::size_type bytes_read = 0;
-    while (bytes_read < content->size() &&
-           (n = TEMP_FAILURE_RETRY(read(fd.get(), content->data() + bytes_read,
-                                        content->size() - bytes_read))) > 0) {
-      bytes_read += n;
-    }
-
-    if (n < 0) return false;
-
-    // If the file was truncated and we read fewer bytes than size, we need to update the size of
-    // the output string to reflect the number of bytes we actually read instead of what was
-    // initially set.
-    content->resize(bytes_read);
   } else {
     content->clear();
     // We have no idea how much to read. Use buffered reading below to avoid overallocating
