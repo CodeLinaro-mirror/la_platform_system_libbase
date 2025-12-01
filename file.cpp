@@ -215,15 +215,13 @@ namespace base {
 // Versions of standard library APIs that support UTF-8 strings.
 using namespace android::base::utf8;
 bool ReadFdToString(borrowed_fd fd, std::string* content) {
-  ssize_t n;
-
   if (struct stat sb; fstat(fd.get(), &sb) != -1 && sb.st_size > 0 && sb.st_size <= SSIZE_MAX) {
     // Although originally we had small files in mind, this code gets used for very large files too,
     // where the std::string growth heuristics might not be suitable.
     // https://code.google.com/p/android/issues/detail?id=258500.
     // Since we know the file size here we can perform one large allocation up front to avoid
     // reallocations and copies that would occur as the string size grows as data is read.
-
+    ssize_t n;
     content->resize_and_overwrite(sb.st_size, [&n, &fd](char* buf, size_t size) noexcept {
       std::string::size_type bytes_read = 0;
       while (bytes_read < size &&
@@ -233,29 +231,22 @@ bool ReadFdToString(borrowed_fd fd, std::string* content) {
       return bytes_read;
     });
 
-    if (n < 0) return false;
-
     // Shrink the string capacity to fit the file, but if the capacity is only
     // slightly larger than needed, avoid reallocating.
     if (content->size() < content->capacity() && content->capacity() - content->size() >= 64) {
       content->shrink_to_fit();
     }
-  } else {
-    content->clear();
-    // We have no idea how much to read. Use buffered reading below to avoid overallocating
-    // the output string for small files.
-    n = -1;
+
+    return n >= 0;
   }
 
-  // Since we expect to stop at the size advertised by fstat we don't know if we're at the end here
-  // because read() will not have returned 0 yet, unless the file was truncated and we stopped
-  // early, so we need to read at least once more until we get 0 bytes from read.
-  // The file could also have been extended while we were reading.
-  if (n != 0) [[likely]] {
-    char buf[4096] __attribute__((__uninitialized__));
-    while ((n = TEMP_FAILURE_RETRY(read(fd.get(), &buf[0], sizeof(buf)))) > 0) {
-      content->append(buf, n);
-    }
+  // We have no idea how much to read. Use buffered reading to avoid overallocating the output
+  // string for small files.
+  content->clear();
+  ssize_t n;
+  char buf[4096] __attribute__((__uninitialized__));
+  while ((n = TEMP_FAILURE_RETRY(read(fd.get(), &buf[0], sizeof(buf)))) > 0) {
+    content->append(buf, n);
   }
 
   return n == 0;
